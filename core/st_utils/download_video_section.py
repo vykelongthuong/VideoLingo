@@ -24,7 +24,7 @@ def download_video_section():
                 sleep(1)
                 st.rerun()
             return True
-        except:
+        except (ValueError, FileNotFoundError):
             col1, col2 = st.columns([3, 1])
             with col1:
                 url = st.text_input(t("Enter YouTube link:"))

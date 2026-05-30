@@ -1,3 +1,4 @@
+import ast
 import os
 import pandas as pd
 import subprocess
@@ -13,15 +14,26 @@ DUB_VOCAL_FILE = 'output/dub.mp3'
 DUB_SUB_FILE = 'output/dub.srt'
 OUTPUT_FILE_TEMPLATE = f"{_AUDIO_SEGS_DIR}/{{}}.wav"
 
+def _safe_parse_list(value):
+    """Safely parse a list from string or return as-is if already a list."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except (ValueError, SyntaxError) as e:
+            raise ValueError(f"Failed to parse list: {e}") from e
+    raise TypeError(f"Expected list or string, got {type(value)}")
+
 def load_and_flatten_data(excel_file):
     """Load and flatten Excel data"""
     df = pd.read_excel(excel_file)
-    lines = [eval(line) if isinstance(line, str) else line for line in df['lines'].tolist()]
+    lines = [_safe_parse_list(line) for line in df['lines'].tolist()]
     lines = [item for sublist in lines for item in sublist]
-    
-    new_sub_times = [eval(time) if isinstance(time, str) else time for time in df['new_sub_times'].tolist()]
+
+    new_sub_times = [_safe_parse_list(time) for time in df['new_sub_times'].tolist()]
     new_sub_times = [item for sublist in new_sub_times for item in sublist]
-    
+
     return df, lines, new_sub_times
 
 def get_audio_files(df):
@@ -29,7 +41,7 @@ def get_audio_files(df):
     audios = []
     for index, row in df.iterrows():
         number = row['number']
-        line_count = len(eval(row['lines']) if isinstance(row['lines'], str) else row['lines'])
+        line_count = len(_safe_parse_list(row['lines']))
         for line_index in range(line_count):
             temp_file = OUTPUT_FILE_TEMPLATE.format(f"{number}_{line_index}")
             audios.append(temp_file)
@@ -111,6 +123,9 @@ def merge_full_audio():
     with console.status("[bold cyan]📝 Generating subtitle file...[/bold cyan]"):
         create_srt_subtitle()
     
+    if not audios:
+        console.print("[bold red]❌ Error: No audio segments found![/bold red]")
+        return
     if not os.path.exists(audios[0]):
         console.print(f"[bold red]❌ Error: First audio file {audios[0]} does not exist![/bold red]")
         return

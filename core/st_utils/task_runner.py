@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import threading
 import time
+import traceback
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -141,5 +142,5 @@ class TaskRunner:
 
             self.state = "completed"
         except Exception as e:
-            self.error_msg = str(e)
+            self.error_msg = f"{e}\n\n--- Traceback ---\n{traceback.format_exc()}"
             self.state = "error"

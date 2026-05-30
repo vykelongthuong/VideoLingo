@@ -28,7 +28,11 @@ def _fetch_model_list(base_url, api_key):
         resp.raise_for_status()
         data = resp.json().get("data", [])
         return sorted([m["id"] for m in data if "id" in m])
-    except Exception:
+    except requests.exceptions.RequestException as e:
+        st.toast(f"Failed to fetch models: {e}", icon="⚠️")
+        return []
+    except Exception as e:
+        st.toast(f"Unexpected error fetching models: {e}", icon="⚠️")
         return []
 
 

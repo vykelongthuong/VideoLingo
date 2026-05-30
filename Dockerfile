@@ -1,14 +1,12 @@
-ARG CUDA_VERSION=12.4.1
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu20.04
+ARG CUDA_VERSION=12.6.0
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
 ARG PYTHON_VERSION=3.10
 
-# Change software sources and install basic tools and system dependencies
-RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common git curl sudo ffmpeg fonts-noto wget \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update -y \
@@ -25,22 +23,17 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 # Workaround for CUDA compatibility issues
 RUN ldconfig /usr/local/cuda-$(echo $CUDA_VERSION | cut -d. -f1,2)/compat/
 
-# Set working directory and clone repository
+# Set working directory
 WORKDIR /app
-RUN git clone https://github.com/Huanshere/VideoLingo.git .
 
-# Install PyTorch and torchaudio
-RUN pip install torch==2.0.0 torchaudio==2.0.0 --index-url https://download.pytorch.org/whl/cu118
+# Copy project files (build from local context, not clone)
+COPY . .
 
-# Clean up unnecessary files
-RUN rm -rf .git
+# Install PyTorch with CUDA 12.6
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 
-# Upgrade pip and install basic dependencies
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install -e .
+# Install project dependencies
+RUN pip install --no-cache-dir -e .
 
 # Set CUDA-related environment variables
 ENV CUDA_HOME=/usr/local/cuda

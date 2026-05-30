@@ -20,7 +20,12 @@ def _ffmpeg_has_encoder(encoder_name: str) -> bool:
         return False
 
 def normalize_audio_volume(audio_path, output_path, target_db = -20.0, format = "wav"):
+    import math
     audio = AudioSegment.from_file(audio_path)
+    if audio.dBFS == float('-inf') or math.isinf(audio.dBFS):
+        rprint(f"[yellow]⚠️ Audio is silent (dBFS = -inf), skipping normalization[/yellow]")
+        audio.export(output_path, format=format)
+        return output_path
     change_in_dBFS = target_db - audio.dBFS
     normalized_audio = audio.apply_gain(change_in_dBFS)
     normalized_audio.export(output_path, format=format)

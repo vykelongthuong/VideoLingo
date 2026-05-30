@@ -1,4 +1,7 @@
-# use try-except to avoid error when installing
+import logging
+
+_logger = logging.getLogger(__name__)
+
 try:
     from . import (
         _1_ytdlp,
@@ -20,8 +23,8 @@ try:
     from .utils import *
     from .utils.onekeycleanup import cleanup
     from .utils.delete_retry_dubbing import delete_dubbing_files
-except ImportError:
-    pass
+except ImportError as e:
+    _logger.warning("core/__init__ import failed in lightweight mode: %s", e)
 
 __all__ = [
     'ask_gpt',

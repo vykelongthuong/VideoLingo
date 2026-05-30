@@ -26,6 +26,7 @@ def load_key(key):
     return value
 
 def update_key(key, new_value):
+    """Update a config value. Returns True on success, False if path invalid."""
     with lock:
         with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
             data = yaml.load(file)
@@ -44,7 +45,7 @@ def update_key(key, new_value):
                 yaml.dump(data, file)
             return True
         else:
-            raise KeyError(f"Key '{keys[-1]}' not found in configuration")
+            return False
         
 # basic utils
 def get_joiner(language):

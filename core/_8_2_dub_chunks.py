@@ -10,6 +10,11 @@ from core.utils.models import *
 SRC_SRT = "output/src.srt"
 TRANS_SRT = "output/trans.srt"
 MAX_MERGE_COUNT = 5
+# NOTE: Despite MAX_MERGE_COUNT=5, merge_rows currently stops merging after at most
+# 3 rows due to the hardcoded `merge_count == 2` condition. This may be intentional
+# to keep chunks small for better dubbing quality. If larger chunks are desired, change
+# the condition to `merge_count == (MAX_MERGE_COUNT - 1)`. CẦN XÁC NHẬN business logic.
+# See also: process_cutoffs() caller passes merge_count=1 initially.
 ESTIMATOR = None
 
 def calc_if_too_fast(est_dur, tol_dur, duration, tolerance):

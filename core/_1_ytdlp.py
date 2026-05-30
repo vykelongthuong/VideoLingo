@@ -19,7 +19,7 @@ def update_ytdlp():
             del sys.modules['yt_dlp']
         rprint("[green]yt-dlp updated[/green]")
     except subprocess.CalledProcessError as e:
-        rprint("[yellow]Warning: Failed to update yt-dlp: {e}[/yellow]")
+        rprint(f"[yellow]Warning: Failed to update yt-dlp: {e}[/yellow]")
     from yt_dlp import YoutubeDL
     return YoutubeDL
 

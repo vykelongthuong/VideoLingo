@@ -16,12 +16,16 @@ GPT_LOG_FOLDER = 'output/gpt_log'
 
 def _save_cache(model, prompt, resp_content, resp_type, resp, message=None, log_title="default"):
     with LOCK:
-        logs = []
         file = os.path.join(GPT_LOG_FOLDER, f"{log_title}.json")
         os.makedirs(os.path.dirname(file), exist_ok=True)
+        logs = []
         if os.path.exists(file):
-            with open(file, 'r', encoding='utf-8') as f:
-                logs = json.load(f)
+            try:
+                with open(file, 'r', encoding='utf-8') as f:
+                    logs = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                rprint(f"[yellow]⚠️ Cache file corrupted, resetting: {file}[/yellow]")
+                logs = []
         logs.append({"model": model, "prompt": prompt, "resp_content": resp_content, "resp_type": resp_type, "resp": resp, "message": message})
         with open(file, 'w', encoding='utf-8') as f:
             json.dump(logs, f, ensure_ascii=False, indent=4)
@@ -30,10 +34,15 @@ def _load_cache(prompt, resp_type, log_title):
     with LOCK:
         file = os.path.join(GPT_LOG_FOLDER, f"{log_title}.json")
         if os.path.exists(file):
-            with open(file, 'r', encoding='utf-8') as f:
-                for item in json.load(f):
-                    if item["prompt"] == prompt and item["resp_type"] == resp_type:
-                        return item["resp"]
+            try:
+                with open(file, 'r', encoding='utf-8') as f:
+                    logs = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                rprint(f"[yellow]⚠️ Cache file corrupted: {file}, ignoring cache[/yellow]")
+                return False
+            for item in logs:
+                if isinstance(item, dict) and item.get("prompt") == prompt and item.get("resp_type") == resp_type:
+                    return item.get("resp")
         return False
 
 # ------------
@@ -41,14 +50,15 @@ def _load_cache(prompt, resp_type, log_title):
 # ------------
 
 @except_handler("GPT request failed", retry=5)
-def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default"):
+def ask_gpt(prompt, resp_type=None, valid_def=None, log_title="default", use_cache=True):
     if not load_key("api.key"):
         raise ValueError("API key is not set")
-    # check cache
-    cached = _load_cache(prompt, resp_type, log_title)
-    if cached:
-        rprint("use cache response")
-        return cached
+    # check cache (skip cache on retries to avoid re-using a bad cached response)
+    if use_cache:
+        cached = _load_cache(prompt, resp_type, log_title)
+        if cached:
+            rprint("use cache response")
+            return cached
 
     model = load_key("api.model")
     base_url = load_key("api.base_url")

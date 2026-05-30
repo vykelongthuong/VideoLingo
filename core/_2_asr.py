@@ -23,6 +23,7 @@ def transcribe():
     # 4. Transcribe audio by clips
     all_results = []
     runtime = load_key("whisper.runtime")
+    ts = None
     if runtime == "local":
         from core.asr_backend.whisperX_local import transcribe_audio as ts
         rprint("[cyan]🎤 Transcribing audio with local model...[/cyan]")
@@ -32,6 +33,8 @@ def transcribe():
     elif runtime == "elevenlabs":
         from core.asr_backend.elevenlabs_asr import transcribe_audio_elevenlabs as ts
         rprint("[cyan]🎤 Transcribing audio with ElevenLabs API...[/cyan]")
+    else:
+        raise ValueError(f"Unknown whisper.runtime: '{runtime}'. Must be one of: local, cloud, elevenlabs")
 
     for start, end in segments:
         result = ts(_RAW_AUDIO_FILE, vocal_audio, start, end)

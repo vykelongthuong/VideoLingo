@@ -81,8 +81,13 @@ def merge_video_audio():
     
     cmd.extend(['-c:a', 'aac', '-b:a', '96k', DUB_VIDEO])
     
-    subprocess.run(cmd)
-    rprint(f"[bold green]Video and audio successfully merged into {DUB_VIDEO}[/bold green]")
+    try:
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        rprint(f"[bold green]Video and audio successfully merged into {DUB_VIDEO}[/bold green]")
+    except subprocess.CalledProcessError as e:
+        rprint(f"[bold red]❌ FFmpeg error (code {e.returncode})[/bold red]")
+        rprint(f"[red]stderr: {e.stderr[-500:] if e.stderr else 'N/A'}[/red]")
+        raise
 
 if __name__ == '__main__':
     merge_video_audio()

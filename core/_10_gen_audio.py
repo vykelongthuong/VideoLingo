@@ -1,7 +1,9 @@
+import ast
 import os
 import time
 import shutil
 import subprocess
+import threading
 from typing import Tuple
 
 import pandas as pd
@@ -20,6 +22,18 @@ console = Console()
 TEMP_FILE_TEMPLATE = f"{_AUDIO_TMP_DIR}/{{}}_temp.wav"
 OUTPUT_FILE_TEMPLATE = f"{_AUDIO_SEGS_DIR}/{{}}.wav"
 WARMUP_SIZE = 5
+_df_lock = threading.Lock()
+
+def _safe_parse_list(value):
+    """Safely parse a list from string or return as-is if already a list."""
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            return ast.literal_eval(value)
+        except (ValueError, SyntaxError) as e:
+            raise ValueError(f"Failed to parse list from string: {e}") from e
+    raise TypeError(f"Expected list or string, got {type(value)}")
 
 def parse_df_srt_time(time_str: str) -> float:
     """Convert SRT time format to seconds"""
@@ -27,15 +41,38 @@ def parse_df_srt_time(time_str: str) -> float:
     seconds, milliseconds = seconds.split('.')
     return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(milliseconds) / 1000
 
+def _build_atempo_filter(speed_factor: float) -> str:
+    """Build FFmpeg atempo filter string, chaining multiple filters for values outside [0.5, 2.0].
+
+    Raises ValueError if speed_factor <= 0.
+    """
+    if speed_factor <= 0:
+        raise ValueError(f"speed_factor must be positive, got {speed_factor}")
+    if abs(speed_factor - 1.0) < 1e-9:
+        return "anull"  # no speed change needed (anull is a no-op audio filter)
+
+    remaining = speed_factor
+    parts = []
+    # Chain atempo filters; each atempo must be in [0.5, 2.0]
+    while abs(remaining - 1.0) > 1e-9:
+        if remaining >= 1.0:
+            factor = min(remaining, 2.0)
+        else:
+            factor = max(remaining, 0.5)
+        parts.append(f'atempo={factor:.6f}')
+        remaining = remaining / factor
+    return ','.join(parts)
+
+
 def adjust_audio_speed(input_file: str, output_file: str, speed_factor: float) -> None:
     """Adjust audio speed and handle edge cases"""
     # If the speed factor is close to 1, directly copy the file
     if abs(speed_factor - 1.0) < 0.001:
         shutil.copy2(input_file, output_file)
         return
-        
-    atempo = speed_factor
-    cmd = ['ffmpeg', '-i', input_file, '-filter:a', f'atempo={atempo}', '-y', output_file]
+
+    filter_str = _build_atempo_filter(speed_factor)
+    cmd = ['ffmpeg', '-i', input_file, '-filter:a', filter_str, '-y', output_file]
     input_duration = get_audio_duration(input_file)
     max_retries = 2
     for attempt in range(max_retries):
@@ -47,7 +84,7 @@ def adjust_audio_speed(input_file: str, output_file: str, speed_factor: float) -
             # If the output duration exceeds the expected duration, but the input audio is less than 3 seconds, and the error is within 0.1 seconds, truncate to the expected length
             if output_duration >= expected_duration * 1.02 and input_duration < 3 and diff <= 0.1:
                 audio = AudioSegment.from_wav(output_file)
-                trimmed_audio = audio[:(expected_duration * 1000)]  # pydub uses milliseconds
+                trimmed_audio = audio[:int(expected_duration * 1000)]  # pydub uses milliseconds
                 trimmed_audio.export(output_file, format="wav")
                 print(f"✂️ Trimmed to expected duration: {expected_duration:.2f} seconds")
                 return
@@ -62,14 +99,23 @@ def adjust_audio_speed(input_file: str, output_file: str, speed_factor: float) -
                 rprint(f"[red]❌ Audio speed adjustment failed, max retries reached ({max_retries})[/red]")
                 raise e
 
-def process_row(row: pd.Series, tasks_df: pd.DataFrame) -> Tuple[int, float]:
-    """Helper function for processing single row data"""
+def process_row(row: pd.Series, tasks_df_snapshot: pd.DataFrame) -> Tuple[int, float]:
+    """Helper function for processing single row data.
+
+    Args:
+        row: a row from the tasks DataFrame (immutable snapshot for this worker).
+        tasks_df_snapshot: a copy of the tasks DataFrame (read-only in worker).
+                           Used by tts_main for context; must NOT be mutated here.
+
+    Returns:
+        (number, real_dur) tuple.  DataFrame mutation is handled by the caller under lock.
+    """
     number = row['number']
-    lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+    lines = _safe_parse_list(row['lines'])
     real_dur = 0
     for line_index, line in enumerate(lines):
         temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
-        tts_main(line, temp_file, number, tasks_df)
+        tts_main(line, temp_file, number, tasks_df_snapshot)
         real_dur += get_audio_duration(temp_file)
     return number, real_dur
 
@@ -85,13 +131,13 @@ def generate_tts_audio(tasks_df: pd.DataFrame) -> pd.DataFrame:
         warmup_size = min(WARMUP_SIZE, len(tasks_df))
         for _, row in tasks_df.head(warmup_size).iterrows():
             try:
-                number, real_dur = process_row(row, tasks_df)
+                number, real_dur = process_row(row, tasks_df.copy())
                 tasks_df.loc[tasks_df['number'] == number, 'real_dur'] = real_dur
                 progress.advance(task)
             except Exception as e:
                 rprint(f"[red]❌ Error in warmup: {str(e)}[/red]")
                 raise e
-        
+
         # for gpt_sovits, do not use parallel to avoid mistakes
         max_workers = load_key("max_workers") if load_key("tts_method") != "gpt_sovits" else 1
         # parallel processing for remaining tasks
@@ -102,11 +148,12 @@ def generate_tts_audio(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     executor.submit(process_row, row, tasks_df.copy())
                     for _, row in remaining_tasks.iterrows()
                 ]
-                
+
                 for future in as_completed(futures):
                     try:
                         number, real_dur = future.result()
-                        tasks_df.loc[tasks_df['number'] == number, 'real_dur'] = real_dur
+                        with _df_lock:
+                            tasks_df.loc[tasks_df['number'] == number, 'real_dur'] = real_dur
                         progress.advance(task)
                     except Exception as e:
                         rprint(f"[red]❌ Error: {str(e)}[/red]")
@@ -162,7 +209,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     cur_time += chunk_df.iloc[i-1]['gap']/speed_factor
                 new_sub_times = []
                 number = row['number']
-                lines = eval(row['lines']) if isinstance(row['lines'], str) else row['lines']
+                lines = _safe_parse_list(row['lines'])
                 for line_index, line in enumerate(lines):
                     # 🔄 Step2: Start speed change and save as OUTPUT_FILE_TEMPLATE
                     temp_file = TEMP_FILE_TEMPLATE.format(f"{number}_{line_index}")
@@ -184,7 +231,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     rprint(f"[yellow]⚠️ Chunk {chunk_start} to {index} exceeds by {time_diff:.3f}s, truncating last audio[/yellow]")
                     # Get the last audio file
                     last_number = tasks_df.iloc[index]['number']
-                    last_lines = eval(tasks_df.iloc[index]['lines']) if isinstance(tasks_df.iloc[index]['lines'], str) else tasks_df.iloc[index]['lines']
+                    last_lines = _safe_parse_list(tasks_df.iloc[index]['lines'])
                     last_line_index = len(last_lines) - 1
                     last_file = OUTPUT_FILE_TEMPLATE.format(f"{last_number}_{last_line_index}")
                     
@@ -192,7 +239,7 @@ def merge_chunks(tasks_df: pd.DataFrame) -> pd.DataFrame:
                     audio = AudioSegment.from_wav(last_file)
                     original_duration = len(audio) / 1000  # Convert to seconds
                     new_duration = original_duration - time_diff
-                    trimmed_audio = audio[:(new_duration * 1000)]  # pydub uses milliseconds
+                    trimmed_audio = audio[:int(new_duration * 1000)]  # pydub uses milliseconds
                     trimmed_audio.export(last_file, format="wav")
                     
                     # Update the last timestamp

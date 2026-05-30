@@ -100,6 +100,26 @@ def get_sentence_timestamps(df_words, df_sentences):
     
     return time_stamp_list
 
+def generate_subtitle_string(df, columns):
+    """Generate SRT subtitle string from DataFrame.
+
+    Safe against NaN/None values — converts them to empty strings.
+    """
+    import pandas as pd
+    parts = []
+    for i, row in df.iterrows():
+        ts = row.get('timestamp', '')
+        col0_val = row.get(columns[0], '')
+        col0 = '' if pd.isna(col0_val) else str(col0_val).strip()
+        if len(columns) > 1:
+            col1_val = row.get(columns[1], '')
+            col1 = '' if pd.isna(col1_val) else str(col1_val).strip()
+        else:
+            col1 = ''
+        parts.append(f"{i+1}\n{ts}\n{col0}\n{col1}\n\n")
+    return ''.join(parts).strip()
+
+
 def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output_dir: str, for_display: bool = True):
     """Align timestamps and add a new timestamp column to df_translate"""
     df_trans_time = df_translate.copy()
@@ -126,10 +146,6 @@ def align_timestamp(df_text, df_translate, subtitle_output_configs: list, output
     # Polish subtitles: replace punctuation in Translation if for_display
     if for_display:
         df_trans_time['Translation'] = df_trans_time['Translation'].apply(lambda x: re.sub(r'[，。]', ' ', x).strip())
-
-    # Output subtitles 📜
-    def generate_subtitle_string(df, columns):
-        return ''.join([f"{i+1}\n{row['timestamp']}\n{row[columns[0]].strip()}\n{row[columns[1]].strip() if len(columns) > 1 else ''}\n\n" for i, row in df.iterrows()]).strip()
 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
