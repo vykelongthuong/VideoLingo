@@ -13,16 +13,9 @@ try:
         _5_split_sub,
         _6_gen_sub,
         _7_sub_into_vid,
-        _8_1_audio_task,
-        _8_2_dub_chunks,
-        _9_refer_audio,
-        _10_gen_audio,
-        _11_merge_audio,
-        _12_dub_to_vid
     )
     from .utils import *
     from .utils.onekeycleanup import cleanup
-    from .utils.delete_retry_dubbing import delete_dubbing_files
 except ImportError as e:
     _logger.warning("core/__init__ import failed in lightweight mode: %s", e)
 
@@ -31,7 +24,6 @@ __all__ = [
     'load_key',
     'update_key',
     'cleanup',
-    'delete_dubbing_files',
     '_1_ytdlp',
     '_2_asr',
     '_3_1_split_nlp',
@@ -41,10 +33,4 @@ __all__ = [
     '_5_split_sub',
     '_6_gen_sub',
     '_7_sub_into_vid',
-    '_8_1_audio_task',
-    '_8_2_dub_chunks',
-    '_9_refer_audio',
-    '_10_gen_audio',
-    '_11_merge_audio',
-    '_12_dub_to_vid'
 ]

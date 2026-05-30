@@ -12,7 +12,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 st.set_page_config(page_title="VideoLingo", page_icon="docs/logo.svg")
 
 SUB_VIDEO = "output/output_sub.mp4"
-DUB_VIDEO = "output/output_dub.mp4"
 
 
 # ─── Task control UI (auto-refreshes every 1s while task is active) ───
@@ -165,73 +164,6 @@ def text_processing_section():
             return True
 
 
-# ─── Audio processing ───
-
-
-def _get_audio_steps():
-    """Return the audio/dubbing processing steps as (label, callable) list."""
-    steps = [
-        (
-            t("Generate audio tasks and chunks"),
-            lambda: (
-                _8_1_audio_task.gen_audio_task_main(),
-                _8_2_dub_chunks.gen_dub_chunks(),
-            ),
-        ),
-        (t("Extract reference audio"), _9_refer_audio.extract_refer_audio_main),
-        (t("Generate and merge audio files"), _10_gen_audio.gen_audio),
-        (t("Merge full audio"), _11_merge_audio.merge_full_audio),
-        (t("Merge final audio into video"), _12_dub_to_vid.merge_video_audio),
-    ]
-    return steps
-
-
-def audio_processing_section():
-    st.header(t("c. Dubbing"))
-    runner = TaskRunner.get(st.session_state, "_audio_runner")
-
-    with st.container(border=True):
-        st.markdown(
-            f"""
-        <p style='font-size: 20px;'>
-        {t("This stage includes the following steps:")}
-        <p style='font-size: 20px;'>
-            1. {t("Generate audio tasks and chunks")}<br>
-            2. {t("Extract reference audio")}<br>
-            3. {t("Generate and merge audio files")}<br>
-            4. {t("Merge final audio into video")}
-        """,
-            unsafe_allow_html=True,
-        )
-
-        if not os.path.exists(DUB_VIDEO):
-            if runner.is_active:
-                _task_control_panel("_audio_runner")
-            elif runner.is_done:
-                _task_control_panel("_audio_runner")
-            else:
-                if st.button(
-                    t("Start Audio Processing"), key="audio_processing_button"
-                ):
-                    steps = _get_audio_steps()
-                    runner.start(steps)
-                    st.rerun()
-        else:
-            st.success(
-                t(
-                    "Audio processing is complete! You can check the audio files in the `output` folder."
-                )
-            )
-            if load_key("burn_subtitles"):
-                st.video(DUB_VIDEO)
-            if st.button(t("Delete dubbing files"), key="delete_dubbing_files"):
-                delete_dubbing_files()
-                st.rerun()
-            if st.button(t("Archive to 'history'"), key="cleanup_in_audio_processing"):
-                cleanup()
-                st.rerun()
-
-
 # ─── Main ───
 
 
@@ -253,7 +185,6 @@ def main():
         st.markdown(give_star_button, unsafe_allow_html=True)
     download_video_section()
     text_processing_section()
-    audio_processing_section()
 
 
 if __name__ == "__main__":

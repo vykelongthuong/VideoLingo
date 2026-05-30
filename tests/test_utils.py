@@ -588,5 +588,56 @@ def test_split_align_subs_no_split_preserves_lengths(monkeypatch):
     assert len(r_remerged) == len(tr)
 
 
+# ============================================================
+# Test: Dubbing UI has been removed (anti-regression)
+# ============================================================
+
+import pathlib
+
+
+def test_st_py_no_dubbing_ui():
+    """st.py should not contain any dubbing UI code."""
+    text = pathlib.Path("st.py").read_text(encoding="utf-8")
+    assert "audio_processing_section" not in text
+    assert "_get_audio_steps" not in text
+    assert "Start Audio Processing" not in text
+    assert "c. Dubbing" not in text
+    assert "DUB_VIDEO" not in text
+
+
+def test_sidebar_no_dubbing_settings():
+    """sidebar_setting.py should not contain Dubbing Settings."""
+    text = pathlib.Path("core/st_utils/sidebar_setting.py").read_text(encoding="utf-8")
+    assert "Dubbing Settings" not in text
+    assert "TTS Method" not in text
+    assert "tts_methods" not in text
+
+
+def test_core_init_no_dubbing_modules():
+    """core/__init__.py __all__ should only export subtitle pipeline modules."""
+    from core import __all__ as exported
+    dubbing_modules = ['_8_1_audio_task', '_8_2_dub_chunks', '_9_refer_audio',
+                       '_10_gen_audio', '_11_merge_audio', '_12_dub_to_vid',
+                       'delete_dubbing_files']
+    for mod in dubbing_modules:
+        assert mod not in exported, f"core.__all__ should not contain '{mod}'"
+
+
+def test_subtitle_pipeline_still_importable():
+    """All subtitle pipeline modules must remain importable."""
+    from core import _1_ytdlp, _2_asr
+    from core import _3_1_split_nlp, _3_2_split_meaning
+    from core import _4_1_summarize, _4_2_translate
+    from core import _5_split_sub, _6_gen_sub, _7_sub_into_vid
+    assert _1_ytdlp is not None
+    assert _7_sub_into_vid is not None
+
+
+def test_check_len_then_trim_still_available():
+    """check_len_then_trim is still needed by _4_2_translate."""
+    from core._8_1_audio_task import check_len_then_trim
+    assert callable(check_len_then_trim)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
