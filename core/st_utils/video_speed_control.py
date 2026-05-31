@@ -190,6 +190,7 @@ def render_video_speed_control(video_file: str) -> None:
 
     st.markdown(f"**{t('Video speed for subtitle generation')}**")
     st.caption(f"{t('Current speed')}: {current_speed:.2f}x")
+    st.caption(t("The adjusted video will be used for transcription and subtitle generation."))
 
     slider_value = min(2.0, max(0.5, current_speed))
     selected_speed = st.slider(

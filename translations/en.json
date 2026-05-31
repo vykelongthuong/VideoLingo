@@ -10,6 +10,7 @@
     "Apply speed": "Apply speed",
     "Reset to original": "Reset to original",
     "Current speed": "Current speed",
+    "The adjusted video will be used for transcription and subtitle generation.": "The adjusted video will be used for transcription and subtitle generation.",
     "Speed changes are disabled after subtitle processing has started. Please delete/reselect or archive before changing speed.": "Speed changes are disabled after subtitle processing has started. Please delete/reselect or archive before changing speed.",
     "Processing speed-adjusted video...": "Processing speed-adjusted video...",
     "Video speed applied successfully.": "Video speed applied successfully.",

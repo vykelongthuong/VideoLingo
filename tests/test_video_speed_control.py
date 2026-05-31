@@ -88,6 +88,31 @@ def test_apply_and_restore_video_speed_with_ffmpeg(tmp_path):
     assert _top_level_videos(output_dir) == [restored]
 
 
+def test_audio_upload_black_screen_video_can_be_speed_adjusted(tmp_path, monkeypatch):
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        pytest.skip("ffmpeg/ffprobe not available")
+
+    import core.st_utils.download_video_section as download_section
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    audio_file = output_dir / "uploaded.wav"
+    _create_test_audio(audio_file, duration=4)
+
+    monkeypatch.setattr(download_section, "OUTPUT_DIR", str(output_dir))
+    black_screen = Path(download_section.convert_audio_to_video(str(audio_file)))
+    assert black_screen.name == "black_screen.mp4"
+    assert black_screen.exists()
+    assert not audio_file.exists()
+    assert find_video_files(save_path=str(output_dir)).replace("\\", "/") == str(black_screen).replace("\\", "/")
+
+    adjusted = Path(apply_video_speed(str(black_screen), 2.0))
+    assert adjusted.exists()
+    assert find_video_files(save_path=str(output_dir)).replace("\\", "/") == str(adjusted).replace("\\", "/")
+    assert _duration(adjusted) == pytest.approx(2.0, rel=0.25, abs=0.5)
+    assert _top_level_videos(output_dir) == [adjusted]
+
+
 def test_asr_and_video_merge_still_resolve_active_video_with_find_video_files():
     import core._2_asr as asr
     import core._7_sub_into_vid as sub_into_vid
@@ -115,6 +140,21 @@ def _create_test_video(path: Path, duration: int) -> None:
         "-c:a",
         "aac",
         "-shortest",
+        str(path),
+    ]
+    subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
+
+
+def _create_test_audio(path: Path, duration: int) -> None:
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"sine=frequency=1000:duration={duration}",
+        "-c:a",
+        "pcm_s16le",
         str(path),
     ]
     subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8")
