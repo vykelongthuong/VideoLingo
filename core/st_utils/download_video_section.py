@@ -6,6 +6,7 @@ from time import sleep
 
 import streamlit as st
 from core._1_ytdlp import download_video_ytdlp, find_video_files
+from core.st_utils.video_speed_control import render_video_speed_control
 from core.utils import *
 from translations.translations import translate as t
 
@@ -17,6 +18,7 @@ def download_video_section():
         try:
             video_file = find_video_files()
             st.video(video_file)
+            render_video_speed_control(video_file)
             if st.button(t("Delete and Reselect"), key="delete_video_button"):
                 os.remove(video_file)
                 if os.path.exists(OUTPUT_DIR):
